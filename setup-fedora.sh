@@ -60,4 +60,13 @@ echo "🧹 Refreshing Application Database..."
 update-desktop-database "$HOME/.local/share/applications"
 sudo update-desktop-database /usr/share/applications
 
+# 7. Smart Sync Automation
+echo "⏰ Scheduling Smart-Sync (Bi-directional)..."
+
+# Path to the script we just created
+SYNC_SCRIPT="$HOME/fedora-setup/uni-sync.sh"
+
+# Inject into crontab
+(crontab -l 2>/dev/null | grep -v "uni-sync.sh"; echo "0 * * * * $SYNC_SCRIPT") | crontab -
+
 echo "✅ ALL DONE. REBOOT RECOMMENDED TO FINALIZE NVIDIA & UI."
