@@ -50,6 +50,8 @@ ALIASES=(
     "alias uni-push='rsync -avzu --exclude=\".conda/\" \$HOME/Documents/University/ /mnt/proxmox/'"
     "alias nas-sync='rsync -avzu \$HOME/Documents/University/ /mnt/nas/'"
     "alias zoom='zoom'"
+    # Add this to the Aliases section of setup-fedora.
+    "alias sync-now='$HOME/fedora-setup/uni-sync.sh'"
 )
 for line in "${ALIASES[@]}"; do
     grep -qF "$line" "$HOME/.bashrc" || echo "$line" >> "$HOME/.bashrc"
@@ -60,13 +62,19 @@ echo "🧹 Refreshing Application Database..."
 update-desktop-database "$HOME/.local/share/applications"
 sudo update-desktop-database /usr/share/applications
 
-# 7. Smart Sync Automation
-echo "⏰ Scheduling Smart-Sync (Bi-directional)..."
+# 7. Chassis-Aware Automation
+CHASSIS=$(hostnamectl chassis)
 
-# Path to the script we just created
-SYNC_SCRIPT="$HOME/fedora-setup/uni-sync.sh"
+if [[ "$CHASSIS" == "desktop" ]]; then
+    echo "🖥️  Desktop Detected: Setting up High-Performance Sync..."
+    # Desktop: Sync every 30 mins, no battery checks needed
+    (crontab -l 2>/dev/null | grep -v "uni-sync.sh"; \
+     echo "*/30 * * * * $HOME/fedora-setup/uni-sync.sh") | crontab -
 
-# Inject into crontab
-(crontab -l 2>/dev/null | grep -v "uni-sync.sh"; echo "0 * * * * $SYNC_SCRIPT") | crontab -
-
-echo "✅ ALL DONE. REBOOT RECOMMENDED TO FINALIZE NVIDIA & UI."
+elif [[ "$CHASSIS" == "laptop" ]]; then
+    echo "💻 Laptop Detected: Setting up Battery-Safe Sync..."
+    # Laptop: Only sync if plugged into AC power (saves battery in lectures)
+    SAFE_CRON="[ \$(cat /sys/class/power_supply/AC/online 2>/dev/null || echo 0) -eq 1 ] && $HOME/fedora-setup/uni-sync.sh"
+    (crontab -l 2>/dev/null | grep -v "uni-sync.sh"; \
+     echo "0 * * * * $SAFE_CRON") | crontab -
+fi
