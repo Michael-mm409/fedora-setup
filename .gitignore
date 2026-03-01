@@ -1,0 +1,9 @@
+# Editor temporary files
+.*.kate-swp
+.swp.*
+*~
+*.tmp
+
+# System files
+.DS_Store
+.directory
