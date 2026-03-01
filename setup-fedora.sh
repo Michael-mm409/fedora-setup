@@ -43,26 +43,45 @@ sudo curl --location https://repo.zoom.us/repo/rpm/zoom_release.repo --output /e
 sudo rpmkeys --import "https://zoom.us/linux/download/pubkey?version=6-3-10"
 sudo dnf install -y zoom
 
-# 5. University Sync Aliases
-echo "🔗 Finalizing Sync Aliases..."
+# 5. University Sync & Terminal Logic
+echo "🔗 Finalizing Aliases and Terminal Logic..."
 ALIASES=(
     "alias uni-pull='rsync -avzu --exclude=\".conda/\" /mnt/proxmox/ \$HOME/Documents/University/'"
     "alias uni-push='rsync -avzu --exclude=\".conda/\" \$HOME/Documents/University/ /mnt/proxmox/'"
     "alias nas-sync='rsync -avzu \$HOME/Documents/University/ /mnt/nas/'"
+    "alias sync-now='\$HOME/fedora-setup/uni-sync.sh'"
     "alias zoom='zoom'"
-    # Add this to the Aliases section of setup-fedora.
-    "alias sync-now='$HOME/fedora-setup/uni-sync.sh'"
 )
 for line in "${ALIASES[@]}"; do
     grep -qF "$line" "$HOME/.bashrc" || echo "$line" >> "$HOME/.bashrc"
 done
 
-# 6. UI Cleanup
-echo "🧹 Refreshing Application Database..."
-update-desktop-database "$HOME/.local/share/applications"
-sudo update-desktop-database /usr/share/applications
+# 6. Terminal Polish (Direnv & Prompt)
+sudo dnf install -y direnv
+if ! grep -q "PROMPT_COMMAND=set_bash_prompt" "$HOME/.bashrc"; then
+cat << 'EOF' >> "$HOME/.bashrc"
 
-# 7. Chassis-Aware Automation
+# Michael's Dynamic Prompt (Fixes Conda Override)
+eval "$(direnv hook bash)"
+parse_git_branch() { git branch 2> /dev/null | sed -e '/^[^*]/d' -e 's/* \(.*\)/ (\1)/'; }
+set_bash_prompt() {
+    local CY='\[\033[01;33m\]' CG='\[\033[01;32m\]' CB='\[\033[01;34m\]' CP='\[\033[01;35m\]' CR='\[\033[00m\]'
+    PS1="${CY}\${CONDA_DEFAULT_ENV:+(\$CONDA_DEFAULT_ENV) }${CR}${CG}\u@\h${CR}:${CB}\w${CR}${CP}\$(parse_git_branch)${CR}\$ "
+}
+PROMPT_COMMAND=set_bash_prompt
+EOF
+fi
+
+# 7. KDE UI Components
+echo "🎨 Ensuring KDE Plasma components are present..."
+
+# Install the 'Icons-only Task Manager' and latte-dock (optional)
+sudo dnf install -y plasma-widgets-addons
+
+# Remove the GNOME extension lines so they don't error out
+# rm -f /etc/yum.repos.d/vscode.repo (example of cleanup)
+
+# 8. Chassis-Aware Automation
 CHASSIS=$(hostnamectl chassis)
 
 if [[ "$CHASSIS" == "desktop" ]]; then
