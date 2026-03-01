@@ -20,8 +20,6 @@ echo "💻 Installing Visual Studio Code (Native RPM)..."
 sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc
 sudo sh -c 'echo -e "[code]\nname=Visual Studio Code\nbaseurl=https://packages.microsoft.com/yumrepos/vscode\nenabled=1\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" > /etc/yum.repos.d/vscode.repo'
 sudo dnf install -y code
-
-# Optional: Pre-install common University extensions
 code --install-extension ms-python.python
 code --install-extension ms-toolsai.jupyter
 
@@ -30,27 +28,25 @@ echo "💬 Configuring Discord & Social..."
 flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 flatpak uninstall dev.vencord.Vesktop -y 2>/dev/null
 flatpak install flathub com.discordapp.Discord -y
-
-# Apply Discord Update-Fix
 mkdir -p "$HOME/.config/discord"
 echo '{"SKIP_HOST_UPDATE": true}' > "$HOME/.config/discord/settings.json"
 
 # 4. Native Zoom Block
 echo "📹 Transitioning to Native Zoom..."
 flatpak uninstall us.zoom.Zoom -y 2>/dev/null
-rm -f "$HOME/.local/share/applications/us.zoom.Zoom.desktop"
 sudo curl --location https://repo.zoom.us/repo/rpm/zoom_release.repo --output /etc/yum.repos.d/zoom_release.repo
-sudo rpmkeys --import "https://zoom.us/linux/download/pubkey?version=6-3-10"
 sudo dnf install -y zoom
 
 # 5. University Sync & Terminal Logic
 echo "🔗 Finalizing Aliases and Terminal Logic..."
+# Update these in your script's ALIASES block
 ALIASES=(
-    "alias uni-pull='rsync -avzu --exclude=\".conda/\" /mnt/proxmox/ \$HOME/Documents/University/'"
-    "alias uni-push='rsync -avzu --exclude=\".conda/\" \$HOME/Documents/University/ /mnt/proxmox/'"
-    "alias nas-sync='rsync -avzu \$HOME/Documents/University/ /mnt/nas/'"
-    "alias sync-now='\$HOME/fedora-setup/uni-sync.sh'"
+    "alias uni-pull='rsync -avzu --exclude=\".conda/\" /mnt/proxmox/ ~/Documents/University/'"
+    "alias uni-push='rsync -avzu --exclude=\".conda/\" ~/Documents/University/ /mnt/Synology_Home/Documents/University/'"
+    "alias nas-sync='rsync -avzu ~/Documents/Synology_Home/ /mnt/Synology_Home/'"
+    "alias sys-sync='cd ~/fedora-setup && git pull && chmod +x setup-fedora.sh && ./setup-fedora.sh'"
 )
+
 for line in "${ALIASES[@]}"; do
     grep -qF "$line" "$HOME/.bashrc" || echo "$line" >> "$HOME/.bashrc"
 done
@@ -60,7 +56,6 @@ sudo dnf install -y direnv
 if ! grep -q "PROMPT_COMMAND=set_bash_prompt" "$HOME/.bashrc"; then
 cat << 'EOF' >> "$HOME/.bashrc"
 
-# Michael's Dynamic Prompt (Fixes Conda Override)
 eval "$(direnv hook bash)"
 parse_git_branch() { git branch 2> /dev/null | sed -e '/^[^*]/d' -e 's/* \(.*\)/ (\1)/'; }
 set_bash_prompt() {
@@ -71,40 +66,36 @@ PROMPT_COMMAND=set_bash_prompt
 EOF
 fi
 
-# 7. KDE UI Components
+# 7. KDE UI Components (Updated for Fedora 43)
 echo "🎨 Ensuring KDE Plasma components are present..."
-
-# Install the 'Icons-only Task Manager' and latte-dock (optional)
-sudo dnf install -y plasma-widgets-addons
-
-# Remove the GNOME extension lines so they don't error out
-# rm -f /etc/yum.repos.d/vscode.repo (example of cleanup)
+sudo dnf install -y kde-plasma-addons kde-connect
 
 # 8. Chassis-Aware Automation
-CHASSIS=$(hostnamectl chassis)
-
 if [[ "$CHASSIS" == "desktop" ]]; then
-    echo "🖥️  Desktop Detected: Setting up High-Performance Sync..."
-    # Desktop: Sync every 30 mins, no battery checks needed
-    (crontab -l 2>/dev/null | grep -v "uni-sync.sh"; \
-     echo "*/30 * * * * $HOME/fedora-setup/uni-sync.sh") | crontab -
-
+    echo "🖥  Desktop Detected: Setting up High-Performance Sync..."
+    (crontab -l 2>/dev/null | grep -v "uni-sync.sh"; echo "*/30 * * * * $HOME/fedora-setup/uni-sync.sh") | crontab -
 elif [[ "$CHASSIS" == "laptop" ]]; then
     echo "💻 Laptop Detected: Setting up Battery-Safe Sync..."
-    # Laptop: Only sync if plugged into AC power (saves battery in lectures)
     SAFE_CRON="[ \$(cat /sys/class/power_supply/AC/online 2>/dev/null || echo 0) -eq 1 ] && $HOME/fedora-setup/uni-sync.sh"
-    (crontab -l 2>/dev/null | grep -v "uni-sync.sh"; \
-     echo "0 * * * * $SAFE_CRON") | crontab -
+    (crontab -l 2>/dev/null | grep -v "uni-sync.sh"; echo "0 * * * * $SAFE_CRON") | crontab -
 fi
 
-# 9. Mobile Integration
-echo "📱 Configuring KDE Connect & Firewall..."
+# 9. Dual-NAS & Local Sync Setup
+echo "🔗 Setting up Dual Synology Mounts..."
+sudo mkdir -p /mnt/Synology_Homes /mnt/Synology_Home
+mkdir -p ~/Documents/Synology_Home
 
-# Install KDE Connect if not present
-sudo dnf install -y kdeconnect
+# setup-fedora.sh - Corrected Dual-Mount Logic
+HOMES_ENTRY="100.90.5.80:/volume1/homes /mnt/Synology_Homes nfs nfsvers=3,nolock,tcp,defaults,_netdev,nofail 0 0"
+BIND_ENTRY="/mnt/Synology_Homes/Michael /mnt/Synology_Home none defaults,bind 0 0"
 
-# Open firewall ports permanently
-if command -v firewall-cmd >/dev/null; then
-    sudo firewall-cmd --permanent --add-service=kdeconnect
-    sudo firewall-cmd --reload
-fi
+# Use sed to remove ALL previous Synology entries before appending new ones
+sudo sed -i '/Synology_Home/d' /etc/fstab
+sudo sed -i '/Synology_Homes/d' /etc/fstab
+
+echo "$HOMES_ENTRY" | sudo tee -a /etc/fstab
+echo "$BIND_ENTRY" | sudo tee -a /etc/fstab
+
+sudo umount -l /mnt/Synology_Homes /mnt/Synology_Home 2>/dev/null
+sudo mount -a
+echo "✅ Setup Complete! Please restart your terminal."
