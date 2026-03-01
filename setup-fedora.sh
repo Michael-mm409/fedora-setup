@@ -50,7 +50,6 @@ ALIASES=(
     "alias uni-push='rsync -avzu --exclude=\".conda/\" \$HOME/Documents/University/ /mnt/proxmox/'"
     "alias nas-sync='rsync -avzu \$HOME/Documents/University/ /mnt/nas/'"
     "alias sync-now='\$HOME/fedora-setup/uni-sync.sh'"
-    "alias zoom='zoom'"
 )
 for line in "${ALIASES[@]}"; do
     grep -qF "$line" "$HOME/.bashrc" || echo "$line" >> "$HOME/.bashrc"
@@ -96,4 +95,16 @@ elif [[ "$CHASSIS" == "laptop" ]]; then
     SAFE_CRON="[ \$(cat /sys/class/power_supply/AC/online 2>/dev/null || echo 0) -eq 1 ] && $HOME/fedora-setup/uni-sync.sh"
     (crontab -l 2>/dev/null | grep -v "uni-sync.sh"; \
      echo "0 * * * * $SAFE_CRON") | crontab -
+fi
+
+# 9. Mobile Integration
+echo "📱 Configuring KDE Connect & Firewall..."
+
+# Install KDE Connect if not present
+sudo dnf install -y kdeconnect
+
+# Open firewall ports permanently
+if command -v firewall-cmd >/dev/null; then
+    sudo firewall-cmd --permanent --add-service=kdeconnect
+    sudo firewall-cmd --reload
 fi
