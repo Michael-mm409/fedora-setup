@@ -24,10 +24,13 @@ code --install-extension ms-python.python
 code --install-extension ms-toolsai.jupyter
 
 # 3. Official Social Apps & Discord
-echo "💬 Configuring Discord & Social..."
+# 3. Official Apps (Social & Email)
+echo "💬 Configuring Flatpaks..."
 flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-flatpak uninstall dev.vencord.Vesktop -y 2>/dev/null
 flatpak install flathub com.discordapp.Discord -y
+flatpak install flathub eu.betterbird.Betterbird -y
+
+# Apply Discord Update-Fix
 mkdir -p "$HOME/.config/discord"
 echo '{"SKIP_HOST_UPDATE": true}' > "$HOME/.config/discord/settings.json"
 
