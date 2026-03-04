@@ -39,12 +39,12 @@ sudo dnf install -y zoom
 
 # 5. University Sync & Terminal Logic
 echo "🔗 Finalizing Aliases and Terminal Logic..."
-# Update these in your script's ALIASES block
+# Update these to match your working split mount and rclone archive
 ALIASES=(
-    "alias uni-pull='rsync -avzu --exclude=\".conda/\" /mnt/proxmox/ ~/Documents/University/'"
-    "alias uni-push='rsync -avzu --exclude=\".conda/\" ~/Documents/University/ /mnt/Synology_Home/Documents/University/'"
-    "alias nas-sync='rsync -avzu ~/Documents/Synology_Home/ /mnt/Synology_Home/'"
-    "alias sys-sync='cd ~/fedora-setup && git pull && chmod +x setup-fedora.sh && ./setup-fedora.sh'"
+    "alias uni-pull='rsync -avzu --no-perms --no-owner --no-group --exclude=\".conda/\" /mnt/proxmox_uni/ ~/Documents/University/'"
+    "alias uni-push='rsync -avzu --no-perms --no-owner --no-group --exclude=\".conda/\" ~/Documents/University/ /mnt/Synology_Home/Documents/University/'"
+    "alias archive-now='systemctl --user start uni-archive.service'"
+    "alias sys-sync='\cd ~/fedora-setup && git pull && chmod +x setup-fedora.sh && ./setup-fedora.sh'"
 )
 
 for line in "${ALIASES[@]}"; do
@@ -86,16 +86,22 @@ sudo mkdir -p /mnt/Synology_Homes /mnt/Synology_Home
 mkdir -p ~/Documents/Synology_Home
 
 # setup-fedora.sh - Corrected Dual-Mount Logic
-HOMES_ENTRY="100.90.5.80:/volume1/homes /mnt/Synology_Homes nfs nfsvers=3,nolock,tcp,defaults,_netdev,nofail 0 0"
-BIND_ENTRY="/mnt/Synology_Homes/Michael /mnt/Synology_Home none defaults,bind 0 0"
+# Ensure all 5 directories exist
+sudo mkdir -p /mnt/proxmox /mnt/proxmox_uni /mnt/nas /mnt/Synology_Homes /mnt/Synology_Home
 
-# Use sed to remove ALL previous Synology entries before appending new ones
-sudo sed -i '/Synology_Home/d' /etc/fstab
-sudo sed -i '/Synology_Homes/d' /etc/fstab
+# Final fstab entries
+PVE_HOME="100.70.100.118:/home/michael /mnt/proxmox nfs rw,_netdev,x-systemd.automount,noauto,soft,timeo=14 0 0"
+PVE_UNI="100.70.100.118:/home/michael/University /mnt/proxmox_uni nfs rw,_netdev,x-systemd.automount,noauto,soft,timeo=14 0 0"
+NAS_UNI="100.90.5.80:/volume1/University /mnt/nas nfs rw,_netdev,x-systemd.automount,noauto,soft,timeo=14 0 0"
+NAS_HOMES="100.90.5.80:/volume1/homes /mnt/Synology_Homes nfs nfsvers=3,nolock,tcp,rw,_netdev,x-systemd.automount,noauto,soft,timeo=14 0 0"
+NAS_BIND="/mnt/Synology_Homes/Michael /mnt/Synology_Home none bind,x-systemd.automount,noauto,x-systemd.requires=/mnt/Synology_Homes 0 0"
 
-echo "$HOMES_ENTRY" | sudo tee -a /etc/fstab
-echo "$BIND_ENTRY" | sudo tee -a /etc/fstab
+# Clean and update fstab
+sudo sed -i '/proxmox/d' /etc/fstab
+sudo sed -i '/Synology/d' /etc/fstab
+sudo sed -i '/\/mnt\/nas/d' /etc/fstab
 
-sudo umount -l /mnt/Synology_Homes /mnt/Synology_Home 2>/dev/null
-sudo mount -a
+echo -e "$PVE_HOME\n$PVE_UNI\n$NAS_UNI\n$NAS_HOMES\n$NAS_BIND" | sudo tee -a /etc/fstab
+sudo systemctl daemon-reload
+
 echo "✅ Setup Complete! Please restart your terminal."
